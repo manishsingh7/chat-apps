@@ -1,17 +1,22 @@
 const express = require("express");
 const connectDB = require("./config/db");
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, './.env') });
+// const dotenv = require("dotenv");
 const userRoutes = require("./routes/userRoutes");
 const chatRoutes = require("./routes/chatRoutes");
-const messageRoutes = require("./routes/messageRoutes")
+const messageRoutes = require("./routes/messageRoutes");
 const { notFound, errorHandler } = require("./middleware/errorMiddleware");
 
-
+const path = require('path')
+require('dotenv').config({path:path.resolve(__dirname,'./.env')})
+// dotenv.config();
 connectDB();
 const app = express();
 
-app.use(express.json());
+app.use(express.json()); // to accept json data
+
+// app.get("/", (req, res) => {
+//   res.send("API Running!");
+// });
 
 app.use("/api/user", userRoutes);
 app.use("/api/chat", chatRoutes);
@@ -33,23 +38,30 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
+// --------------------------deployment------------------------------
+
+// Error Handling middlewares
 app.use(notFound);
 app.use(errorHandler);
 
-const server = app.listen(5000, () => {
-  console.log("Server started on PORT 5000");
-});
+const PORT = process.env.PORT;
 
-const io = require('socket.io')(server,{
-  pingTimeout:60000,
-  cors:{
-    origin:"http://localhost:3000",
+const server = app.listen(
+  PORT,
+  console.log(`Server running on PORT ${PORT}...`.yellow.bold)
+);
+
+const io = require("socket.io")(server, {
+  pingTimeout: 60000,
+  cors: {
+    // origin: "http://localhost:3000",
+    origin: "https://chat-app-sahayak.onrender.com",
+    // credentials: true,
   },
-})
+});
 
 io.on("connection", (socket) => {
   console.log("Connected to socket.io");
-
   socket.on("setup", (userData) => {
     socket.join(userData._id);
     socket.emit("connected");
@@ -59,11 +71,9 @@ io.on("connection", (socket) => {
     socket.join(room);
     console.log("User Joined Room: " + room);
   });
-
   socket.on("typing", (room) => socket.in(room).emit("typing"));
   socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));
 
-  
   socket.on("new message", (newMessageRecieved) => {
     var chat = newMessageRecieved.chat;
 
@@ -74,5 +84,10 @@ io.on("connection", (socket) => {
 
       socket.in(user._id).emit("message recieved", newMessageRecieved);
     });
+  });
+
+  socket.off("setup", () => {
+    console.log("USER DISCONNECTED");
+    socket.leave(userData._id);
   });
 });
